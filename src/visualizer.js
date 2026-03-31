@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createNoise2D } from 'simplex-noise';
 import { CONFIG } from './config.js';
 
 export class Visualizer {
@@ -13,6 +14,9 @@ export class Visualizer {
             maxHeight: 0
         };
 
+        // Initialize Simplex noise for organic terrain
+        this.noise2D = createNoise2D();
+
         this.zCurrent = new Float32Array(CONFIG.N_RINGS * CONFIG.N_ANGLES).fill(0);
         this.radialProfile = new Float32Array(CONFIG.N_RINGS);
         this.staticOffsets = new Float32Array(CONFIG.N_RINGS * CONFIG.N_ANGLES);
@@ -20,35 +24,36 @@ export class Visualizer {
         this.geometry = new THREE.BufferGeometry();
         this.initGeometry();
 
-        // Load the sharp, craggy mountain textures
+        // Load textures - diffuse only for now
         const loader = new THREE.TextureLoader();
-        const rockTex = loader.load('assets/textures/rock.png');
-        const mossTex = loader.load('assets/textures/moss.png');
-        const sandTex = loader.load('assets/textures/sand.png');
+        
+        const rockDiffuse = loader.load('assets/textures/rock.png');
+        const mossDiffuse = loader.load('assets/textures/moss.png');
+        const sandDiffuse = loader.load('assets/textures/sand.png');
 
-        // Set wrapping for triplanar tiling
-        [rockTex, mossTex, sandTex].forEach(tex => {
+        // Set wrapping and color space
+        const textureList = [rockDiffuse, mossDiffuse, sandDiffuse];
+        
+        textureList.forEach(tex => {
             tex.wrapS = THREE.RepeatWrapping;
             tex.wrapT = THREE.RepeatWrapping;
             tex.colorSpace = THREE.SRGBColorSpace;
         });
 
-        // Initialize uniforms for our custom shader
+        // Initialize uniforms for triplanar blending
         this.uniforms = {
-            tRock: { value: rockTex },
-            tMoss: { value: mossTex },
-            tSand: { value: sandTex },
-            tNoise: { value: null },
-            uScale: { value: 0.008 }, // Slightly more tiling for detail
-            uSlopeSharpness: { value: 12.0 }, // Sharper rock-to-moss transitions
+            tRockDiffuse: { value: rockDiffuse },
+            tMossDiffuse: { value: mossDiffuse },
+            tSandDiffuse: { value: sandDiffuse },
+            uScale: { value: 0.008 },
+            uSlopeSharpness: { value: 12.0 },
             uHeightScale: { value: CONFIG.Z_SCALE }
         };
 
         // Custom Material using onBeforeCompile to inject Triplanar Blending
         this.material = new THREE.MeshStandardMaterial({
-            roughness: 0.9,
-            metalness: 0.1,
-            flatShading: true,
+            roughness: 0.7,
+            metalness: 0.0,
             side: THREE.DoubleSide
         });
 
@@ -67,14 +72,15 @@ export class Visualizer {
             );
 
             shader.fragmentShader = `
-                uniform sampler2D tRock;
-                uniform sampler2D tMoss;
-                uniform sampler2D tSand;
+                uniform sampler2D tRockDiffuse;
+                uniform sampler2D tMossDiffuse;
+                uniform sampler2D tSandDiffuse;
                 uniform float uScale;
                 uniform float uSlopeSharpness;
                 varying vec3 vWorldPosition;
                 varying vec3 vWorldNormal;
 
+                // Triplanar blending helper for any texture
                 vec3 getTriplanarBlend(sampler2D tex, vec3 p, vec3 n) {
                     vec3 blending = abs(n);
                     blending /= (blending.x + blending.y + blending.z);
@@ -89,25 +95,28 @@ export class Visualizer {
                 '#include <map_fragment>',
                 `
                 vec3 worldN = normalize(vWorldNormal);
-                vec3 rockSample = getTriplanarBlend(tRock, vWorldPosition, worldN);
-                vec3 mossSample = getTriplanarBlend(tMoss, vWorldPosition, worldN);
-                vec3 sandSample = getTriplanarBlend(tSand, vWorldPosition, worldN);
+                
+                // Sample all three texture sets using triplanar mapping
+                vec3 rockDiffuse = getTriplanarBlend(tRockDiffuse, vWorldPosition, worldN);
+                vec3 mossDiffuse = getTriplanarBlend(tMossDiffuse, vWorldPosition, worldN);
+                vec3 sandDiffuse = getTriplanarBlend(tSandDiffuse, vWorldPosition, worldN);
 
-                float slope = 1.0 - worldN.y; // 0 = flat, 1 = vertical
+                float slope = 1.0 - worldN.y;
                 float height = vWorldPosition.y;
 
-                // Height biomes:
-                // low = sand basin, mid = moss/rock, high = snow caps.
+                // Biome masks
                 float lowSand = 1.0 - smoothstep(18.0, 95.0, height);
                 float rockSlope = smoothstep(0.20, 0.72, slope);
                 float highRock = smoothstep(140.0, 240.0, height);
-
-                // Favor moss in mid elevations, preserve rock on cliffs and the tallest ridges.
                 float rockMask = clamp(rockSlope * 0.72 + highRock * 0.28, 0.0, 1.0);
-                vec3 midColor = mix(mossSample, rockSample, rockMask);
-                vec3 baseColor = mix(midColor, sandSample, lowSand);
 
-                // Snow appears as broken, wind-like patches near the highest peaks.
+                // Blend rock and moss first
+                vec3 midColor = mix(mossDiffuse, rockDiffuse, rockMask);
+                
+                // Blend mid with sand (basin)
+                vec3 baseColor = mix(midColor, sandDiffuse, lowSand);
+
+                // Snow using rock as base (wind-scoured peaks)
                 float snowLineNoise = sin(vWorldPosition.x * 0.012) * 10.0 + sin(vWorldPosition.z * 0.015) * 10.0;
                 float snowStart = 305.0 + snowLineNoise;
                 float snowHeight = smoothstep(snowStart, snowStart + 70.0, height);
@@ -116,13 +125,13 @@ export class Visualizer {
                 float snowPatch = smoothstep(0.35, 0.82, snowPatchNoise);
                 float snowMask = pow(clamp(snowHeight * snowFacing * snowPatch, 0.0, 1.0), 1.25) * 0.85;
 
-                // Keep some terrain detail inside snow so caps do not look flat.
-                float rockLuma = dot(rockSample, vec3(0.299, 0.587, 0.114));
-                vec3 snowColor = vec3(0.82, 0.85, 0.88) * mix(0.85, 1.05, rockLuma);
-                snowColor = mix(rockSample * 0.92, snowColor, 0.62);
-                baseColor = mix(baseColor, snowColor, snowMask);
+                // Snow is slightly smoother and less metallic
+                vec3 snowColor = vec3(0.82, 0.85, 0.88);
+                snowColor = mix(rockDiffuse * 0.92, snowColor, 0.62);
+                
+                vec3 finalColor = mix(baseColor, snowColor, snowMask);
 
-                diffuseColor.rgb = baseColor;
+                diffuseColor.rgb = finalColor;
                 `
             );
         };
@@ -143,13 +152,13 @@ export class Visualizer {
 
         // Pre-calculate radial profile (Donut/Ring shape)
         for (let r = 0; r < N_RINGS; r++) {
-            const t = r / (N_RINGS - 1); // 0 = inner, 1 = outer
-            // Peak farther from center so animated ring sits outside the water disk.
+            const t = r / (N_RINGS - 1);
+            // Peak farther from center so animated ring sits outside the water disk
             const landMask = Math.exp(-Math.pow((t - 0.66) / 0.17, 2));
             this.radialProfile[r] = landMask;
         }
 
-        // Generate Polar Grid
+        // Generate Polar Grid with Simplex noise for organic terrain
         let idx = 0;
         for (let r = 0; r < N_RINGS; r++) {
             const radius = RADIUS_START + (r / (N_RINGS - 1)) * (RADIUS_END - RADIUS_START);
@@ -163,16 +172,36 @@ export class Visualizer {
                 positions[idx * 3 + 1] = 0; // Y is height
                 positions[idx * 3 + 2] = z;
 
-                // Bake high-frequency rocky spire noise for the heights
-                let noise = Math.sin(x * 0.01 + z * 0.015) * 0.5 + 0.5;
-                noise += (Math.sin(x * 0.03 - z * 0.04) * 0.5 + 0.5) * 0.5;
-                noise += (Math.sin(-x * 0.08 + z * 0.07) * 0.5 + 0.5) * 0.25;
-                noise = noise / 1.75;
+                // Multi-octave Simplex noise for natural terrain variation
+                // Octave 1: Large scale features
+                let noise1 = this.noise2D(x * 0.001, z * 0.001) * 0.5 + 0.5;
+                
+                // Octave 2: Medium scale features
+                let noise2 = this.noise2D(x * 0.003, z * 0.003) * 0.5 + 0.5;
+                
+                // Octave 3: High frequency detail
+                let noise3 = this.noise2D(x * 0.008, z * 0.008) * 0.5 + 0.5;
+                
+                // Octave 4: Ultra-fine spikes
+                let noise4 = this.noise2D(x * 0.02, z * 0.02) * 0.5 + 0.5;
 
-                // Sharpen peaks for natural mountains
-                const spikeNoise = Math.pow(noise, 3) * 1.5;
+                // Combine octaves for natural-looking terrain (Perlin-like)
+                let noise = (noise1 * 0.5 + noise2 * 0.25 + noise3 * 0.15 + noise4 * 0.1) / 1.0;
+                
+                // Sharpen peaks for mountainous terrain
+                const spikeNoise = Math.pow(noise, 2.5) * 1.8;
+                
+                // Add subtle angle-based jitter to break regularity
                 const jitter = (Math.sin(a * 7.3 + r * 3.1) * 0.2 + 0.8);
-                this.staticOffsets[idx] = spikeNoise * jitter;
+                
+                // Ridge function for more dramatic peaks
+                const ridgeNoise = Math.abs(noise * 2.0 - 1.0);
+                const ridgeFactor = Math.pow(1.0 - ridgeNoise, 2.2);
+
+                // Combine spike and ridge for more natural variation
+                const finalHeight = spikeNoise * 0.6 + ridgeFactor * 0.4;
+                
+                this.staticOffsets[idx] = finalHeight * jitter;
 
                 idx++;
             }

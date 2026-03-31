@@ -4,9 +4,13 @@ import { Visualizer } from './src/visualizer.js';
 import { CONFIG } from './src/config.js';
 import { createBowl } from './src/bowl.js';
 import { createWater } from './src/water.js';
+import { optimizeRendererSettings, createProceduralCanvas } from './src/visual-enhancements.js';
 
 // Initialize Three.js Boilerplate
 const { scene, camera, renderer, controls } = createScene();
+
+// Optimize renderer for quality
+optimizeRendererSettings(renderer);
 
 // Initialize Visualizer Logic
 const visualizer = new Visualizer(scene);

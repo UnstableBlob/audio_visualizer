@@ -8,32 +8,33 @@ export function createBowl(scene) {
   concreteTex.wrapS = THREE.RepeatWrapping;
   concreteTex.wrapT = THREE.RepeatWrapping;
   concreteTex.repeat.set(4, 4);
+  concreteTex.colorSpace = THREE.SRGBColorSpace;
 
-  // Outer rim — a flat torus-like ring
-  // RADIUS_END from config is 950. Let's make rim slightly larger or fit.
-  const rimGeo = new THREE.TorusGeometry(
-    CONFIG.RADIUS_END + 30, // pushed out a tiny bit so terrain fits inside
-    60,    // thickness of the rim
-    16,    // radial segments
-    64     // tubular segments
-  );
-
+  // Enhanced stone material
   const stoneMat = new THREE.MeshStandardMaterial({
     map: concreteTex,
     color: 0xcccccc,
-    roughness: 0.8,
-    metalness: 0.2,
+    roughness: 0.75,
+    metalness: 0.0
   });
+
+  // Outer rim — a flat torus-like ring
+  const rimGeo = new THREE.TorusGeometry(
+    CONFIG.RADIUS_END + 30,
+    60,
+    32,
+    128
+  );
 
   const rim = new THREE.Mesh(rimGeo, stoneMat);
   rim.rotation.x = Math.PI / 2;
-  rim.position.y = -20; // drop it slightly below the terrain max height zero
+  rim.position.y = -20;
   rim.receiveShadow = true;
   rim.castShadow = true;
   scene.add(rim);
 
   // Pedestal base
-  const baseGeo = new THREE.CylinderGeometry(CONFIG.RADIUS_END + 30, 200, 150, 48);
+  const baseGeo = new THREE.CylinderGeometry(CONFIG.RADIUS_END + 30, 200, 150, 64);
   const base = new THREE.Mesh(baseGeo, stoneMat);
   base.position.y = -95;
   base.receiveShadow = true;
