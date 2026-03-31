@@ -95,21 +95,32 @@ export class Visualizer {
 
                 float slope = 1.0 - worldN.y; // 0 = flat, 1 = vertical
                 float height = vWorldPosition.y;
-                
-                // Mix biomes
-                // Steep cliffs = Rock
-                // Flat low area = Sand
-                // Flat/Mid area = Moss/Grass
-                float rockFactor = clamp(slope * uSlopeSharpness - 0.2, 0.0, 1.0);
-                float heightFactor = clamp((height - 5.0) / 40.0, 0.0, 1.0); 
-                
-                vec3 baseColor = mix(sandSample, mossSample, heightFactor);
-                // Blend in rock on slopes or very high peaks
-                float peakFactor = clamp((height - 180.0) / 150.0, 0.0, 1.0);
-                baseColor = mix(baseColor, rockSample, max(rockFactor, peakFactor));
-                
-                // Darken rock peaks for ambient depth
-                baseColor *= (1.0 - peakFactor * 0.4);
+
+                // Height biomes:
+                // low = sand basin, mid = moss/rock, high = snow caps.
+                float lowSand = 1.0 - smoothstep(18.0, 95.0, height);
+                float rockSlope = smoothstep(0.20, 0.72, slope);
+                float highRock = smoothstep(140.0, 240.0, height);
+
+                // Favor moss in mid elevations, preserve rock on cliffs and the tallest ridges.
+                float rockMask = clamp(rockSlope * 0.72 + highRock * 0.28, 0.0, 1.0);
+                vec3 midColor = mix(mossSample, rockSample, rockMask);
+                vec3 baseColor = mix(midColor, sandSample, lowSand);
+
+                // Snow appears as broken, wind-like patches near the highest peaks.
+                float snowLineNoise = sin(vWorldPosition.x * 0.012) * 10.0 + sin(vWorldPosition.z * 0.015) * 10.0;
+                float snowStart = 305.0 + snowLineNoise;
+                float snowHeight = smoothstep(snowStart, snowStart + 70.0, height);
+                float snowFacing = 1.0 - smoothstep(0.14, 0.55, slope);
+                float snowPatchNoise = sin(vWorldPosition.x * 0.035 + vWorldPosition.z * 0.02) * 0.5 + 0.5;
+                float snowPatch = smoothstep(0.35, 0.82, snowPatchNoise);
+                float snowMask = pow(clamp(snowHeight * snowFacing * snowPatch, 0.0, 1.0), 1.25) * 0.85;
+
+                // Keep some terrain detail inside snow so caps do not look flat.
+                float rockLuma = dot(rockSample, vec3(0.299, 0.587, 0.114));
+                vec3 snowColor = vec3(0.82, 0.85, 0.88) * mix(0.85, 1.05, rockLuma);
+                snowColor = mix(rockSample * 0.92, snowColor, 0.62);
+                baseColor = mix(baseColor, snowColor, snowMask);
 
                 diffuseColor.rgb = baseColor;
                 `

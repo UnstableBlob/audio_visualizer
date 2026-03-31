@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 export const CONFIG = {
-    N_RINGS: 60,
+    N_RINGS: 20,
     N_ANGLES: 120,
     RADIUS_START: 150,
     RADIUS_END: 950,
