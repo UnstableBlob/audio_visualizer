@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>3D Cinematic Visualizer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Outfit:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --primary: #fff;
+        --accent: #4f46e5;
+        --bg: #000;
+        --glass: rgba(255, 255, 255, 0.05);
+        --glass-border: rgba(255, 255, 255, 0.1);
+      }
+      body { 
+        margin: 0; 
+        background: var(--bg); 
+        overflow: hidden; 
+        font-family: 'Inter', sans-serif; 
+        color: white; 
+      }
+      canvas { display: block; }
+      
+      #ui { 
+        position: fixed; 
+        top: 30px; 
+        left: 30px; 
+        z-index: 10; 
+        pointer-events: none; 
+      }
+      h1 { 
+        margin: 0; 
+        font-family: 'Outfit', sans-serif;
+        font-weight: 700; 
+        letter-spacing: 4px; 
+        text-transform: uppercase; 
+        font-size: 1.5rem; 
+        background: linear-gradient(to right, #fff, #888);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      .instruction { 
+        margin: 8px 0; 
+        font-size: 0.75rem; 
+        opacity: 0.6; 
+        letter-spacing: 1px;
+        text-transform: uppercase;
+      }
+
+      #controls {
+        position: fixed;
+        bottom: 40px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 20;
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        background: var(--glass);
+        backdrop-filter: blur(20px);
+        padding: 12px 24px;
+        border-radius: 100px;
+        border: 1px solid var(--glass-border);
+        box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        pointer-events: all;
+        transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+      }
+
+      #controls:hover {
+        border-color: rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .btn {
+        background: white;
+        color: black;
+        border: none;
+        padding: 10px 24px;
+        border-radius: 50px;
+        font-weight: 600;
+        font-size: 0.85rem;
+        cursor: pointer;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-family: 'Outfit', sans-serif;
+      }
+
+      .btn:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(255,255,255,0.2);
+        background: #f0f0f0;
+      }
+
+      .btn:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+      }
+
+      .btn-secondary {
+        background: transparent;
+        color: white;
+        border: 1px solid var(--glass-border);
+      }
+
+      .btn-secondary:hover:not(:disabled) {
+        background: var(--glass);
+      }
+
+      #file-input-wrapper {
+        position: relative;
+        overflow: hidden;
+      }
+
+      #file-input {
+        position: absolute;
+        top: 0;
+        left: 0;
+        opacity: 0;
+        cursor: pointer;
+        width: 100%;
+        height: 100%;
+      }
+
+      #status {
+        position: fixed;
+        bottom: 100px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 0.7rem;
+        opacity: 0.4;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+      }
+
+      #init-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: black;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 100;
+        transition: opacity 1s ease;
+      }
+
+      #init-overlay.hide {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      #init-btn {
+        padding: 20px 40px;
+        background: white;
+        color: black;
+        border: none;
+        font-family: 'Outfit', sans-serif;
+        font-weight: 700;
+        font-size: 1rem;
+        text-transform: uppercase;
+        letter-spacing: 4px;
+        cursor: pointer;
+        transition: all 0.5s cubic-bezier(0.19, 1, 0.22, 1);
+      }
+
+      #init-btn:hover {
+        letter-spacing: 8px;
+        padding-left: 50px;
+        padding-right: 30px;
+      }
+      input[type=range] {
+        -webkit-appearance: none;
+        appearance: none;
+        background: transparent;
+        cursor: pointer;
+      }
+
+      input[type=range]::-webkit-slider-runnable-track {
+        background: rgba(255, 255, 255, 0.1);
+        height: 4px;
+        border-radius: 2px;
+      }
+
+      input[type=range]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        height: 12px;
+        width: 12px;
+        background: white;
+        border-radius: 50%;
+        margin-top: -4px;
+        box-shadow: 0 0 10px rgba(255,255,255,0.5);
+      }
+
+      #seeker-container {
+        position: fixed;
+        bottom: 110px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 400px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        pointer-events: all;
+        opacity: 0;
+        transition: opacity 0.5s ease;
+      }
+
+      #seeker-container.visible {
+        opacity: 1;
+      }
+
+      #seeker {
+        width: 100%;
+        margin: 0;
+      }
+
+      .time-info {
+        display: flex;
+        justify-content: space-between;
+        font-size: 10px;
+        font-family: 'Inter', sans-serif;
+        letter-spacing: 1px;
+        opacity: 0.5;
+        text-transform: uppercase;
+      }
+
+      .volume-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-left: 10px;
+        padding-left: 15px;
+        border-left: 1px solid var(--glass-border);
+      }
+
+      #volume-slider {
+        width: 80px;
+      }
+
+      .icon {
+        width: 16px;
+        height: 16px;
+        opacity: 0.6;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="init-overlay">
+      <h1 style="margin-bottom: 40px;">3D Cinematic Dome</h1>
+      <button id="init-btn">Begin Experience</button>
+    </div>
+
+    <div id="ui">
+      <h1>Cosmos</h1>
+      <p class="instruction">Press 'C' to Toggle Color Modes</p>
+    </div>
+
+    <div id="status">No file loaded</div>
+
+    <div id="seeker-container">
+      <div class="time-info">
+        <span id="current-time">0:00</span>
+        <span id="total-time">0:00</span>
+      </div>
+      <input type="range" id="seeker" value="0" step="0.1" min="0" max="100">
+    </div>
+
+    <div id="controls">
+      <div id="file-input-wrapper" class="btn btn-secondary">
+        <span>Import Track</span>
+        <input type="file" id="file-input" accept="audio/*" />
+      </div>
+      <button id="play-pause-btn" class="btn" disabled>Play</button>
+      
+      <div class="color-picker-wrapper">
+        <input type="color" id="color-picker" value="#cc00ff" title="Change Visualizer Color">
+      </div>
+
+      <div class="volume-wrapper">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"></path></svg>
+        <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="0.7">
+      </div>
+    </div>
+
+    <div id="app"></div>
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>
