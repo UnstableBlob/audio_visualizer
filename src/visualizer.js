@@ -142,9 +142,11 @@ export class Visualizer {
         this.scene.add(this.terrain);
     }
 
+    /*
     getDebugInfo() {
         return this.lastDebug;
     }
+    */
 
     initGeometry() {
         const { N_RINGS, N_ANGLES, RADIUS_START, RADIUS_END } = CONFIG;
