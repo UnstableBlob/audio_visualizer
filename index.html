@@ -4,8 +4,9 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>3D Cinematic Visualizer</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Outfit:wght@300;400;700&display=swap" rel="stylesheet">
+    <title>Echo Terrain Visualizer</title>
+    <meta name="description" content="A high-fidelity terrain audio visualizer with dynamic 3D displacement." />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Outfit:wght@400;700&display=swap" rel="stylesheet">
     <style>
       :root {
         --primary: #fff;
@@ -34,20 +35,10 @@
         margin: 0; 
         font-family: 'Outfit', sans-serif;
         font-weight: 700; 
-        letter-spacing: 4px; 
+        letter-spacing: 2px; 
         text-transform: uppercase; 
-        font-size: 1.5rem; 
-        background: linear-gradient(to right, #fff, #888);
-        -webkit-background-clip: text;
-        background-clip: text;
-        -webkit-text-fill-color: transparent;
-      }
-      .instruction { 
-        margin: 8px 0; 
-        font-size: 0.75rem; 
-        opacity: 0.6; 
-        letter-spacing: 1px;
-        text-transform: uppercase;
+        font-size: 1.2rem; 
+        color: #fff;
       }
 
       #controls {
@@ -59,43 +50,24 @@
         display: flex;
         gap: 15px;
         align-items: center;
-        background: var(--glass);
-        backdrop-filter: blur(20px);
+        background: #111;
         padding: 12px 24px;
-        border-radius: 100px;
-        border: 1px solid var(--glass-border);
-        box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        border-radius: 8px;
+        border: 1px solid #333;
         pointer-events: all;
-        transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
-      }
-
-      #controls:hover {
-        border-color: rgba(255, 255, 255, 0.2);
-        background: rgba(255, 255, 255, 0.08);
       }
 
       .btn {
-        background: white;
+        background: #eee;
         color: black;
         border: none;
-        padding: 10px 24px;
-        border-radius: 50px;
+        padding: 8px 20px;
+        border-radius: 4px;
         font-weight: 600;
         font-size: 0.85rem;
         cursor: pointer;
         text-transform: uppercase;
-        letter-spacing: 1px;
-        transition: all 0.3s ease;
-        display: flex;
-        align-items: center;
-        gap: 8px;
         font-family: 'Outfit', sans-serif;
-      }
-
-      .btn:hover:not(:disabled) {
-        transform: translateY(-2px);
-        box-shadow: 0 5px 15px rgba(255,255,255,0.2);
-        background: #f0f0f0;
       }
 
       .btn:disabled {
@@ -106,11 +78,7 @@
       .btn-secondary {
         background: transparent;
         color: white;
-        border: 1px solid var(--glass-border);
-      }
-
-      .btn-secondary:hover:not(:disabled) {
-        background: var(--glass);
+        border: 1px solid #444;
       }
 
       #file-input-wrapper {
@@ -134,71 +102,54 @@
         left: 50%;
         transform: translateX(-50%);
         font-size: 0.7rem;
-        opacity: 0.4;
+        opacity: 0.5;
         text-transform: uppercase;
-        letter-spacing: 2px;
+        letter-spacing: 1px;
       }
 
-      #init-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: black;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        z-index: 100;
-        transition: opacity 1s ease;
-      }
-
-      #init-overlay.hide {
-        opacity: 0;
-        pointer-events: none;
-      }
-
-      #init-btn {
-        padding: 20px 40px;
-        background: white;
-        color: black;
-        border: none;
-        font-family: 'Outfit', sans-serif;
-        font-weight: 700;
-        font-size: 1rem;
-        text-transform: uppercase;
-        letter-spacing: 4px;
-        cursor: pointer;
-        transition: all 0.5s cubic-bezier(0.19, 1, 0.22, 1);
-      }
-
-      #init-btn:hover {
-        letter-spacing: 8px;
-        padding-left: 50px;
-        padding-right: 30px;
-      }
       input[type=range] {
         -webkit-appearance: none;
         appearance: none;
+        width: 100%;
         background: transparent;
         cursor: pointer;
       }
 
+      input[type=range]:focus {
+        outline: none;
+      }
+
+      /* Webkit (Chrome, Safari, Edge) */
       input[type=range]::-webkit-slider-runnable-track {
-        background: rgba(255, 255, 255, 0.1);
+        background: #666;
         height: 4px;
         border-radius: 2px;
       }
 
       input[type=range]::-webkit-slider-thumb {
         -webkit-appearance: none;
-        height: 12px;
-        width: 12px;
+        height: 14px;
+        width: 14px;
         background: white;
         border-radius: 50%;
-        margin-top: -4px;
-        box-shadow: 0 0 10px rgba(255,255,255,0.5);
+        margin-top: -5px; /* (14-4)/2 = 5 */
+        box-shadow: 0 0 5px rgba(0,0,0,0.5);
+      }
+
+      /* Firefox */
+      input[type=range]::-moz-range-track {
+        background: #666;
+        height: 4px;
+        border-radius: 2px;
+      }
+
+      input[type=range]::-moz-range-thumb {
+        height: 14px;
+        width: 14px;
+        background: white;
+        border-radius: 50%;
+        border: none;
+        box-shadow: 0 0 5px rgba(0,0,0,0.5);
       }
 
       #seeker-container {
@@ -212,7 +163,6 @@
         gap: 8px;
         pointer-events: all;
         opacity: 0;
-        transition: opacity 0.5s ease;
       }
 
       #seeker-container.visible {
@@ -240,7 +190,7 @@
         gap: 12px;
         margin-left: 10px;
         padding-left: 15px;
-        border-left: 1px solid var(--glass-border);
+        border-left: 1px solid #333;
       }
 
       #volume-slider {
@@ -255,13 +205,8 @@
     </style>
   </head>
   <body>
-    <div id="init-overlay">
-      <h1 style="margin-bottom: 40px;">3D Cinematic Dome</h1>
-      <button id="init-btn">Begin Experience</button>
-    </div>
-
     <div id="ui">
-      <h1>Cosmos</h1>
+      <h1>Echo Terrain Visualizer</h1>
     </div>
 
     <div id="status">No file loaded</div>
