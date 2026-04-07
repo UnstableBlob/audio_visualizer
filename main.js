@@ -41,7 +41,7 @@ function formatTime(seconds) {
 function animate() {
     requestAnimationFrame(animate);
     controls.update();
-    
+
     if (audio.isStarted) {
         const bands = audio.getInterpolatedBands(64);
         visualizer.update(bands);
@@ -72,7 +72,7 @@ fileInput.addEventListener('change', async (e) => {
     if (file) {
         try {
             statusText.textContent = `Loading: ${file.name}...`;
-            
+
             // Initialize audio on first user interaction if not already done
             if (!audio.isStarted) {
                 await audio.init();
@@ -80,7 +80,7 @@ fileInput.addEventListener('change', async (e) => {
 
             await audio.loadAudio(file);
             statusText.textContent = `Ready: ${file.name}`;
-            
+
             // Set slider range
             const duration = audio.getDuration();
             seeker.max = duration;

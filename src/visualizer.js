@@ -80,6 +80,11 @@ export class Visualizer {
                 varying vec3 vWorldPosition;
                 varying vec3 vWorldNormal;
 
+                // Simple random noise for film grain/texture
+                float random(vec2 p) {
+                    return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453123);
+                }
+
                 // Triplanar blending helper for any texture
                 vec3 getTriplanarBlend(sampler2D tex, vec3 p, vec3 n) {
                     vec3 blending = abs(n);
@@ -130,6 +135,10 @@ export class Visualizer {
                 snowColor = mix(rockDiffuse * 0.92, snowColor, 0.62);
                 
                 vec3 finalColor = mix(baseColor, snowColor, snowMask);
+
+                // Add very subtle static noise for texture
+                float grain = random(vWorldPosition.xz) * 0.03;
+                finalColor += grain;
 
                 diffuseColor.rgb = finalColor;
                 `
@@ -233,30 +242,38 @@ export class Visualizer {
     update(audioBands) {
         const { N_RINGS, N_ANGLES, Z_SCALE, ATTACK_RATE, DECAY_RATE, NOISE_STRENGTH } = CONFIG;
 
-        // Track frame energy and auto-lift low masters so displacement remains visible.
+        // Process audio data or provide defaults for idle state
+        let hasAudio = false;
         let sumBand = 0;
         let peakBand = 0;
-        for (let i = 0; i < audioBands.length; i++) {
-            const v = audioBands[i];
-            sumBand += v;
-            if (v > peakBand) peakBand = v;
+        
+        if (audioBands && audioBands.length > 0) {
+            for (let i = 0; i < audioBands.length; i++) {
+                const v = audioBands[i];
+                if (v > 0.001) hasAudio = true;
+                sumBand += v;
+                if (v > peakBand) peakBand = v;
+            }
         }
-        const avgBand = audioBands.length > 0 ? sumBand / audioBands.length : 0;
+
+        const avgBand = audioBands && audioBands.length > 0 ? sumBand / audioBands.length : 0;
         const targetGain = THREE.MathUtils.clamp(0.32 / Math.max(peakBand, 0.02), 1.0, 8.0);
         this.dynamicGain = THREE.MathUtils.lerp(this.dynamicGain, targetGain, 0.12);
 
         // Mirror waves onto N_ANGLES
         const halfAngles = N_ANGLES / 2;
         const waves = new Float32Array(N_ANGLES);
-        for (let a = 0; a < halfAngles; a++) {
-            const t = a / (halfAngles - 1);
-            const bandIdx = Math.floor(t * (audioBands.length - 1));
-            const val = audioBands[bandIdx] * this.dynamicGain;
-            waves[a] = val;
-            waves[N_ANGLES - 1 - a] = val;
+        if (hasAudio) {
+            for (let a = 0; a < halfAngles; a++) {
+                const t = a / (halfAngles - 1);
+                const bandIdx = Math.floor(t * (audioBands.length - 1));
+                const val = audioBands[bandIdx] * this.dynamicGain;
+                waves[a] = val;
+                waves[N_ANGLES - 1 - a] = val;
+            }
         }
 
-        this.noiseTime += 0.03;
+        this.noiseTime += 0.005; // Slower noise for idle
         const posAttr = this.geometry.attributes.position.array;
         let maxHeight = 0;
 
@@ -266,6 +283,8 @@ export class Visualizer {
             for (let a = 0; a < N_ANGLES; a++) {
                 const i = r * N_ANGLES + a;
                 const theta = (a / N_ANGLES) * Math.PI * 2;
+                const x = Math.cos(theta) * r;
+                const z = Math.sin(theta) * r;
 
                 // Target Height combines Audio + Baked Jitter
                 const targetZ = waves[a] * rProf * Z_SCALE * (this.staticOffsets[i] * 0.8 + 0.2);
@@ -276,9 +295,18 @@ export class Visualizer {
                     this.zCurrent[i] *= DECAY_RATE;
                 }
 
-                // Add slight continuous noise for water/beach ripple
-                const noise1 = Math.sin(theta * 4 + this.noiseTime) * 0.5;
-                const totalNoise = noise1 * NOISE_STRENGTH * rProf * 0.2;
+                // Organic idle movement using multi-octave Fractal Noise
+                const nx = x * 0.08;
+                const nz = z * 0.08;
+                const time = this.noiseTime;
+                
+                let idleNoise = this.noise2D(nx, nz + time) * 0.5;
+                idleNoise += this.noise2D(nx * 2.5, nz * 2.5 + time * 1.3) * 0.25;
+                idleNoise += this.noise2D(nx * 5.1, nz * 5.1 + time * 1.7) * 0.125;
+                idleNoise = (idleNoise + 0.5) * 0.85; // Roughly 0-1 range
+
+                const idleStrength = hasAudio ? 0.2 : 1.0; 
+                const totalNoise = idleNoise * NOISE_STRENGTH * rProf * idleStrength;
 
                 const finalZ = this.zCurrent[i] + totalNoise;
                 posAttr[i * 3 + 1] = finalZ;

@@ -9,5 +9,11 @@ export const CONFIG = {
     SENSITIVITY: 1.8,
     ATTACK_RATE: 0.6,
     DECAY_RATE: 0.88,
-    NOISE_STRENGTH: 18.0
+    NOISE_STRENGTH: 80.0,
+    BIOME_HEIGHTS: {
+        SAND_END: 95.0,
+        ROCK_START: 140.0,
+        ROCK_FULL: 240.0,
+        SNOW_START: 185.0
+    }
 };
